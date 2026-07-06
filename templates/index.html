@@ -1,0 +1,239 @@
+    <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Disease Prediction System</title>
+
+    <!-- Bootstrap CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&family=Spectral:wght@600&display=swap"
+    >
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+<div class="header">
+    <h1>Disease Prediction System</h1>
+    <p>Answer the questions based on Book1.csv columns.</p>
+</div>
+
+<div class="container mt-4 mb-5">
+    <div class="card p-4">
+        <form action="/predict" method="post">
+            <div class="vitals-section mb-4">
+                <h2 class="section-title">Patient Vitals</h2>
+                <div class="vitals-grid">
+                    <div>
+                        <label class="form-label" for="patient-name">Name <span class="text-danger">*</span></label>
+                        <input
+                            id="patient-name"
+                            name="patient_name"
+                            type="text"
+                            class="form-control"
+                            placeholder="Enter patient name"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label class="form-label" for="patient-age">Age <span class="text-danger">*</span></label>
+                        <input
+                            id="patient-age"
+                            name="patient_age"
+                            type="number"
+                            min="0"
+                            max="150"
+                            class="form-control"
+                            placeholder="Enter age"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label class="form-label" for="patient-gender">Gender <span class="text-danger">*</span></label>
+                        <select id="patient-gender" name="patient_gender" class="form-select" required>
+                            <option value="">Select gender</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="patient-bp">Blood Pressure</label>
+                        <input
+                            id="patient-bp"
+                            name="patient_blood_pressure"
+                            type="text"
+                            class="form-control"
+                            placeholder="e.g., 120/80"
+                        />
+                    </div>
+                    <div>
+                        <label class="form-label" for="patient-sugar">Sugar</label>
+                        <input
+                            id="patient-sugar"
+                            name="patient_sugar"
+                            type="text"
+                            class="form-control"
+                            placeholder="e.g., 95 mg/dL"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div class="search-row mb-3">
+                <label class="form-label" for="category-select">Choose a category</label>
+                <select id="category-select" name="selected_category" class="form-select" required>
+                    <option value="" selected disabled>Choose a category</option>
+                    {% for group_name, group_cols in feature_groups %}
+                    <option value="{{ category_key_map[group_name] }}">
+                        {{ group_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="search-row mb-3">
+                <label class="form-label" for="symptom-search">Filter questions</label>
+                <input
+                    id="symptom-search"
+                    type="text"
+                    class="form-control"
+                    placeholder="Type to filter symptoms"
+                />
+            </div>
+
+            <p class="helper-text">Check all symptoms that apply.</p>
+            <div class="symptom-groups" id="symptom-groups">
+                {% for group_name, items in questionnaire_map.items() %}
+                {% set group_index = loop.index %}
+                <details
+                    class="symptom-category"
+                    data-category="{{ category_key_map[group_name] }}"
+                    {% if loop.first %}open{% endif %}
+                >
+                    <summary>
+                        <span class="category-title">{{ group_name }}</span>
+                        <span class="category-count">{{ items | length }}</span>
+                    </summary>
+                    <div class="symptom-grid">
+                        {% for field_key, question in items %}
+                        <div class="symptom-item" data-name="{{ field_key | lower }}">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="symptom-{{ loop.index }}-{{ group_index }}"
+                                name="{{ field_key }}"
+                                value="1"
+                            />
+                            <label class="form-check-label" for="symptom-{{ loop.index }}-{{ group_index }}">
+                                {{ question }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </details>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-custom mt-4">
+                Predict Disease
+            </button>
+        </form>
+
+        {% if prediction_data %}
+        <section class="prediction-card mt-4">
+            <div class="prediction-card__header">
+                <div>
+                    <p class="prediction-kicker">Prediction Result</p>
+                    <h3 class="prediction-title">{{ prediction_data.disease }}</h3>
+                </div>
+                <div class="confidence-pill">
+                    {{ prediction_data.confidence }}% confidence
+                </div>
+            </div>
+
+            <div class="prediction-grid">
+                <div class="prediction-panel">
+                    <h4>Diagnosis Summary</h4>
+                    <p class="prediction-copy">
+                        Category: <strong>{{ prediction_data.selected_category }}</strong><br>
+                        {% if prediction_data.used_rule_based %}
+                        Prediction mode: <strong>Category scoring</strong>
+                        {% else %}
+                        Prediction mode: <strong>ML fallback</strong>
+                        {% endif %}
+                    </p>
+                </div>
+
+                <div class="prediction-panel">
+                    <h4>Recommended Treatment</h4>
+                    <p class="prediction-copy"><strong>Medicine:</strong> {{ prediction_data.medicine }}</p>
+                    <p class="prediction-copy"><strong>Advice:</strong> {{ prediction_data.advice }}</p>
+                    <p class="prediction-copy"><strong>Suggestions:</strong> {{ prediction_data.suggestions }}</p>
+                    <p class="prediction-copy"><strong>Suggestion source:</strong> {{ prediction_data.suggestion_source }}</p>
+                    {% if prediction_data.suggestion_note %}
+                    <p class="prediction-copy"><strong>Note:</strong> {{ prediction_data.suggestion_note }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if prediction_data.top_symptoms %}
+            <div class="prediction-panel mt-3">
+                <h4>Top Matching Symptoms</h4>
+                <div class="tag-list">
+                    {% for symptom, score in prediction_data.top_symptoms %}
+                    <span class="tag-chip">
+                        {{ symptom }} · {{ (score * 100) | round(0) }}%
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if prediction_data.runner_ups %}
+            <div class="prediction-panel mt-3">
+                <h4>Other Conditions Considered</h4>
+                <div class="tag-list">
+                    {% for disease, score in prediction_data.runner_ups %}
+                    <span class="tag-chip tag-chip--muted">
+                        {{ disease }} · {{ (score * 100) | round(0) }}%
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if prediction_data.used_rule_based and prediction_data.rule_based_top %}
+            <div class="prediction-panel mt-3">
+                <h4>Top Rule-Based Matches</h4>
+                <div class="tag-list">
+                    {% for disease, score in prediction_data.rule_based_top %}
+                    <span class="tag-chip tag-chip--accent">
+                        {{ disease }} · {{ (score * 100) | round(0) }}%
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </section>
+
+        <div class="action-row mt-3">
+            <a href="/history" class="btn btn-info">View History</a>
+            <a href="/download" class="btn btn-success">Download Report</a>
+        </div>
+
+        {% if prediction_text %}
+        <details class="debug-details mt-3">
+            <summary>Show debug text</summary>
+            <pre class="debug-text">{{ prediction_text }}</pre>
+        </details>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
